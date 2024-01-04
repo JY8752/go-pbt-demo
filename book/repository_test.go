@@ -8,8 +8,42 @@ import (
 	container "go-pbt/internal"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
+
+	"pgregory.net/rapid"
 )
+
+// ジェネレーター
+func title() *rapid.Generator[string] {
+	return rapid.String()
+}
+
+func author() *rapid.Generator[string] {
+	return rapid.String()
+}
+
+func isbn() *rapid.Generator[string] {
+	return rapid.Custom(func(t *rapid.T) string {
+		a := rapid.OneOf(rapid.Just("978"), rapid.Just("979")).Draw(t, "isbn-a")
+		b := strconv.Itoa(rapid.IntRange(0, 9999).Draw(t, "isbn-b"))
+		c := strconv.Itoa(rapid.IntRange(0, 9999).Draw(t, "isbn-c"))
+		d := strconv.Itoa(rapid.IntRange(0, 999).Draw(t, "isbn-d"))
+		e := rapid.StringOfN(
+			rapid.RuneFrom([]rune{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'X'}),
+			1, 1, 1,
+		).Draw(t, "isbn-e")
+
+		return strings.Join([]string{a, b, c, d, e}, "-")
+	})
+}
+
+func TestExample(t *testing.T) {
+	for i := 0; i < 10; i++ {
+		fmt.Println(isbn().Example(i))
+	}
+}
 
 const migrationPath = "../db/migrations"
 
