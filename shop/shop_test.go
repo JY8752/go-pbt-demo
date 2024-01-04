@@ -19,7 +19,7 @@ type itemPrices struct {
 func itemPriceList(size int) *rapid.Generator[itemPrices] {
 	return rapid.Custom(func(t *rapid.T) itemPrices {
 		prices := priceList().Draw(t, "prices")
-		items, expectedPrice := itemList(t, prices, size)
+		items, expectedPrice := itemList(prices, size)
 		return itemPrices{
 			items:         items,
 			expectedPrice: expectedPrice,
@@ -37,9 +37,6 @@ func keys[K comparable, V any](m map[K]V) []K {
 }
 
 func random[K comparable, V any](m map[K]V, keys []K) (k K, v V) {
-	if len(m) == 0 || len(keys) == 0 {
-		return
-	}
 	if len(keys) == 1 {
 		return keys[0], m[keys[0]]
 	}
@@ -49,7 +46,7 @@ func random[K comparable, V any](m map[K]V, keys []K) (k K, v V) {
 	return key, m[key]
 }
 
-func itemList(t *rapid.T, prices map[string]int, size int) (items []string, expectedPrice int) {
+func itemList(prices map[string]int, size int) (items []string, expectedPrice int) {
 	items = make([]string, size)
 	itemNames := keys(prices)
 	for i := 0; i < size; i++ {
@@ -66,13 +63,13 @@ func priceList() *rapid.Generator[map[string]int] {
 		rapid.String().Filter(func(v string) bool { return v != "" }),
 		rapid.Int(),
 		1,
-		10,
+		100,
 	)
 }
 
 func TestNoSpecial(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
-		size := rapid.IntRange(0, 10).Draw(t, "size")
+		size := rapid.IntRange(0, 30).Draw(t, "size")
 		ip := itemPriceList(size).Draw(t, "ip")
 		act, err := shop.Total(ip.items, ip.prices, []any{})
 		if err != nil {
