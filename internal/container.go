@@ -10,6 +10,10 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/ory/dockertest/v3"
 	"github.com/ory/dockertest/v3/docker"
+
+	"github.com/golang-migrate/migrate/v4"
+	mygratemysql "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 func init() {
@@ -94,4 +98,26 @@ func (mc *MySQLContainer) Close() {
 		log.Printf("could not close db: %s\n", err)
 	}
 	log.Println("mysql container end🐳")
+}
+
+func (mc *MySQLContainer) Migrate(path string) error {
+	driver, err := mygratemysql.WithInstance(mc.DB, &mygratemysql.Config{})
+	if err != nil {
+		return err
+	}
+
+	migrate, err := migrate.NewWithDatabaseInstance(
+		"file://"+path,
+		"mysql",
+		driver,
+	)
+	if err != nil {
+		return err
+	}
+
+	if err = migrate.Up(); err != nil {
+		return err
+	}
+
+	return nil
 }
