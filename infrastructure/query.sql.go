@@ -35,7 +35,7 @@ func (q *Queries) AddBook(ctx context.Context, arg AddBookParams) error {
 	return err
 }
 
-const addCopy = `-- name: AddCopy :exec
+const addCopy = `-- name: AddCopy :execresult
 UPDATE books SET
   owned = owned + 1,
   available = available + 1 
@@ -44,19 +44,17 @@ WHERE
 `
 
 // 既存の本を1冊追加する
-func (q *Queries) AddCopy(ctx context.Context, isbn string) error {
-	_, err := q.db.ExecContext(ctx, addCopy, isbn)
-	return err
+func (q *Queries) AddCopy(ctx context.Context, isbn string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, addCopy, isbn)
 }
 
-const borrowCopy = `-- name: BorrowCopy :exec
+const borrowCopy = `-- name: BorrowCopy :execresult
 UPDATE books SET available = available - 1 WHERE isbn = ? AND available > 0
 `
 
 // 本を1冊借りる
-func (q *Queries) BorrowCopy(ctx context.Context, isbn string) error {
-	_, err := q.db.ExecContext(ctx, borrowCopy, isbn)
-	return err
+func (q *Queries) BorrowCopy(ctx context.Context, isbn string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, borrowCopy, isbn)
 }
 
 const findByAuthor = `-- name: FindByAuthor :many
@@ -110,29 +108,44 @@ func (q *Queries) FindByIsbn(ctx context.Context, isbn string) (Book, error) {
 	return i, err
 }
 
-const findByTitle = `-- name: FindByTitle :one
+const findByTitle = `-- name: FindByTitle :many
 SELECT isbn, title, author, owned, available FROM books WHERE title LIKE ?
 `
 
-func (q *Queries) FindByTitle(ctx context.Context, title string) (Book, error) {
-	row := q.db.QueryRowContext(ctx, findByTitle, title)
-	var i Book
-	err := row.Scan(
-		&i.Isbn,
-		&i.Title,
-		&i.Author,
-		&i.Owned,
-		&i.Available,
-	)
-	return i, err
+func (q *Queries) FindByTitle(ctx context.Context, title string) ([]Book, error) {
+	rows, err := q.db.QueryContext(ctx, findByTitle, title)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Book
+	for rows.Next() {
+		var i Book
+		if err := rows.Scan(
+			&i.Isbn,
+			&i.Title,
+			&i.Author,
+			&i.Owned,
+			&i.Available,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-const returnCopy = `-- name: ReturnCopy :exec
+const returnCopy = `-- name: ReturnCopy :execresult
 UPDATE books SET available = available + 1 WHERE isbn = ?
 `
 
 // 本を返却する
-func (q *Queries) ReturnCopy(ctx context.Context, isbn string) error {
-	_, err := q.db.ExecContext(ctx, returnCopy, isbn)
-	return err
+func (q *Queries) ReturnCopy(ctx context.Context, isbn string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, returnCopy, isbn)
 }
