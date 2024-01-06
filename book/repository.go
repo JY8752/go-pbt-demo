@@ -21,27 +21,31 @@ type bookRepository struct {
 	q *infrastructure.Queries
 }
 
-func NewRepository(db *sql.DB) BookRepository {
+func NewRepository(db *sql.DB) *bookRepository {
 	return &bookRepository{q: infrastructure.New(db)}
 }
 
-type AddBookOption struct {
+type addBookOption struct {
 	Owned sql.NullInt32
 	Avail sql.NullInt32
 }
 
-type addBookOptions func(*AddBookOption)
+type addBookOptions func(*addBookOption)
 
-func WithOwned(o *AddBookOption, owned int32) {
-	o.Owned = sql.NullInt32{Int32: owned, Valid: true}
+func WithOwned(owned int32) addBookOptions {
+	return func(o *addBookOption) {
+		o.Owned = sql.NullInt32{Int32: owned, Valid: true}
+	}
 }
 
-func WithAvail(o *AddBookOption, avail int32) {
-	o.Avail = sql.NullInt32{Int32: avail, Valid: true}
+func WithAvail(avail int32) addBookOptions {
+	return func(o *addBookOption) {
+		o.Avail = sql.NullInt32{Int32: avail, Valid: true}
+	}
 }
 
 func (br *bookRepository) AddBook(ctx context.Context, isbn, title, author string, options ...addBookOptions) error {
-	var op AddBookOption
+	var op addBookOption
 	for _, option := range options {
 		option(&op)
 	}
@@ -57,22 +61,26 @@ func (br *bookRepository) AddBook(ctx context.Context, isbn, title, author strin
 	return br.q.AddBook(ctx, params)
 }
 
-func (br *bookRepository) AddCopy(ctx context.Context, isbn string) error {
-	result, err := br.q.AddCopy(ctx, isbn)
-	if err != nil {
-		return err
-	}
-
+func checkAffected(result sql.Result) error {
 	rows, err := result.RowsAffected()
 	if err != nil {
 		return err
 	}
 
 	if rows == 0 {
-		return fmt.Errorf("not found isbn: %s", isbn)
+		return fmt.Errorf("not affected")
 	}
 
 	return nil
+}
+
+func (br *bookRepository) AddCopy(ctx context.Context, isbn string) error {
+	result, err := br.q.AddCopy(ctx, isbn)
+	if err != nil {
+		return err
+	}
+
+	return checkAffected(result)
 }
 
 func (br *bookRepository) BorrowCopy(ctx context.Context, isbn string) error {
@@ -81,16 +89,7 @@ func (br *bookRepository) BorrowCopy(ctx context.Context, isbn string) error {
 		return err
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rows == 0 {
-		return fmt.Errorf("not found isbn: %s", isbn)
-	}
-
-	return nil
+	return checkAffected(result)
 }
 
 func (br *bookRepository) ReturnCopy(ctx context.Context, isbn string) error {
@@ -99,16 +98,7 @@ func (br *bookRepository) ReturnCopy(ctx context.Context, isbn string) error {
 		return err
 	}
 
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rows == 0 {
-		return fmt.Errorf("not found isbn: %s", isbn)
-	}
-
-	return nil
+	return checkAffected(result)
 }
 
 func (br *bookRepository) FindBookByAuthor(ctx context.Context, author string) ([]infrastructure.Book, error) {
